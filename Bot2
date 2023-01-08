@@ -1,0 +1,155 @@
+import json
+import telebot as tb
+import requests
+from bs4 import BeautifulSoup as bs
+from random import choice, randint
+
+
+token = '5901479486:AAG0ehIXTRNRJdQoD0VldeaDjWh7HOcPwec'
+bot = tb.TeleBot(token)
+
+
+@bot.message_handler(commands=['start', 'help', ])
+def send_welcome(message):
+    welcome_text = '''Привет, Человек! Я могу отправить случайный факт, и музыку вдобавок!'''
+    keyboard = tb.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=False)
+    button1 = tb.types.KeyboardButton('Факт')
+    button2 = tb.types.KeyboardButton('Поэзия')
+    button3 = tb.types.KeyboardButton('Стикер')
+    button4 = tb.types.KeyboardButton('Котики')
+    button5 = tb.types.KeyboardButton('Музыка')
+    button6 = tb.types.KeyboardButton('Игра')
+    button7 = tb.types.KeyboardButton('Задачка')
+    keyboard.add(button1, button2, button3, button4, button5, button6, button7, )
+    bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
+
+
+@bot.message_handler(commands=['fact', ])
+def send_fact(message):
+    response = requests.get('https://i-fakt.ru/')
+    data = response.content
+    html = bs(data, 'html.parser')
+    fact = choice(html.find_all(class_='p-2 clearfix'))
+    fact_link = fact.a.attrs['href']
+    fact_text = fact.text
+    bot.send_message(message.chat.id, fact_link + fact_text)
+
+
+@bot.message_handler(commands=['music'], )
+def send_music(message):
+    music_file = open('c:/Users/admin/PycharmProjects/python-ex/files/happy.mp3', 'rb')
+    bot.send_audio(message.chat.id, music_file)
+
+
+@bot.message_handler(commands=['kittens'], )
+def send_kitten(message):
+    rand = randint(1, 10)
+    kitten = open(f'c:/Users/admin/PycharmProjects/python-ex/files/{str(rand)}.jpg', 'rb')
+    bot.send_photo(message.chat.id, kitten)
+
+
+@bot.message_handler(commands=['sticker'], )
+def send_sticker(message):
+    sticker_file = open('c:/Users/admin/PycharmProjects/python-ex/files/1576600112_3.png', 'rb')
+    bot.send_sticker(message.chat.id, sticker_file)
+
+
+@bot.message_handler(commands=['poem'])
+def send_poem(message):
+    for page in range(1, 5):
+        if page == 1:
+            response = requests.get('https://rustih.ru/mixail-lermontov/')
+            data = response.content
+            html = bs(data, 'html.parser')
+            found = html.find('div', class_='posts-container').find_all('div', class_='entry-title',)
+            poems = [i.find('a')['href'] for i in found]
+        elif page > 1:
+            response = requests.get(f'https://rustih.ru/mixail-lermontov/page/{page}/')
+            data = response.content
+            html = bs(data, 'html.parser')
+            found = html.find('div', class_='posts-container').find_all('div', class_='entry-title', )
+            poems_list = [i.find('a')['href'] for i in found]
+    poem_chosen_link = choice(poems_list)
+    response = requests.get(poem_chosen_link)
+    html = bs(response.content, 'html.parser')
+    poem_text = html.find('div', class_="entry-content poem-text").text
+    bot.send_message(message.chat.id, poem_text + '\n' + poem_chosen_link,)
+        
+
+@bot.message_handler(command=['game', ], )
+def send_game(message):
+    global genres, genres_list
+    response = requests.get('https://store.steampowered.com/?l=russian')
+    data = response.content
+    src = bs(data, 'html.parser')
+    # Составляем список жанров для пользователя (названия жанров назодятся в нижеописанной классе в меню КАТЕГОРИИ на главной стрнице)
+    genres = src.find_all('div', class_="popup_menu_subheader popup_genre_expand_header responsive_hidden")
+    genres_list = [i.get_text().strip() for i in genres]
+    choose_dict = dict(zip([i for i in range(1, len(genres_list) + 1)], genres_list))
+    text = ''
+    for genre in choose_dict.keys():
+        text += f'{genre}.{choose_dict[genre]}\n'
+    bot.send_message(message.chat.id, text)
+    bot.send_message(message.chat.id, f'\nВведите номер (от 1 до {len(choose_dict)}) или название жанра.')
+    # функция, которая выводит потльзователю список жанров и возвращает выбранный пользователем номер жанра
+
+@bot.message_handler(commands=[''])
+def games_by_choice(message, choicee):
+    # функция принимает hmtl-код жанров и превращает его в список из ссылок,
+    # переходит на ссылку страницы жанра и ищет там блок данных, из которого выбирает названия игр,
+    # и возвращает случайно выбранное название пользоваелю  (использованы random и json)
+
+        links = [i.find('a', class_='popup_menu_item')['href'] for i in genres]
+        link_recomended = links[choicee - 1]
+        response = requests.get(link_recomended)
+        data = response.content
+        src = bs(data, 'html.parser')
+        finding = src.find('div', id='application_config')
+        finding2 = finding['data-ch_broadcasts_data_6']
+        finding_dict_list_of_games = json.loads(finding2)['filtered']
+        games = []
+        for dict_ in finding_dict_list_of_games:
+            games.append(dict_['app_name'])
+        game_advice = f'Советую поиграть в {choice(games)}, она как раз в жанре {genres_list[choicee - 1]}'
+        bot.send_message(message.chat.id, game_advice)
+
+
+@bot.message_handler(commands=['kata',], )
+def send_kata(message):
+    response = requests.get('https://ege.sdamgia.ru/test?id=49915973&nt=True&pub=False')
+    html = bs(response.content, 'html.parser')
+    tasks = [i.text for i in html.find('div', class_='wrapper').find_all('p', class_='left_margin')]
+    bot.send_message(message.chat.id, choice(tasks))
+
+
+@bot.message_handler(content_types=['text'])
+def answer(message):
+    if message.text.strip() == 'Факт':
+        send_fact(message)
+    elif message.text.strip() == 'Котики':
+        send_kitten(message)
+    elif message.text.strip() == 'Музыка':
+        send_music(message)
+    elif message.text.strip() == 'Стикер':
+        send_sticker(message)
+    elif message.text.strip() == 'Поэзия':
+        send_poem(message)
+    elif message.text.strip() == 'Игра':
+        send_game(message)
+    elif message.text.strip() == 'Задачка':
+        send_kata(message)
+    elif message.text.strip() == '1' or message.text.strip() == 'Экшен':
+        games_by_choice(message, 1)
+    elif message.text.strip() == '2' or message.text.strip() == 'Приключенческая игра':
+        games_by_choice(message, 2)
+    elif message.text.strip() == '3' or message.text.strip() == 'Ролевые игры':
+        games_by_choice(message, 3)
+    elif message.text.strip() == '4' or message.text.strip() == 'Симулятор':
+        games_by_choice(message, 4)
+    elif message.text.strip() == '5' or message.text.strip() == 'Стратегия':
+        games_by_choice(message, 5)
+    elif message.text.strip() == '6' or message.text.strip() == 'Спорт и гонки':
+        games_by_choice(message, 6)
+
+
+bot.polling()
