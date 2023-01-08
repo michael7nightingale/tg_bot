@@ -1,0 +1,137 @@
+import telebot as tb
+import requests
+from random import choice
+from bs4 import BeautifulSoup as bs
+from math import sqrt
+from telebot import types
+
+#токен бота
+token = '5855237632:AAE55uQLCOMTzF_E_wisC-5-Gq3OGyrEVQo'
+
+# объект бота
+bot = tb.TeleBot(token)
+
+
+# команда-приветствие
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = tb.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button_hello = tb.types.KeyboardButton('Привет, бот!',)
+    markup.add(button_hello)
+    bot.send_message(message.chat.id, 'Привет! Я вычислительный бот!\n'
+                                      'Умею много разного, о не лишён технических неполадок(((. Чтобы у нас с тобой все сложилось хорошо, следуй эти двум правилам:\n\t-внимательно соблюдай инструкции ввода данных;\n\t'
+                                      '-после того, как я исполнил Вашу команду, поблагодарите меня пожалуйста одним сообщением))\n\nНапечатай команду, или получи список команд, нажав кнопку', reply_markup=markup)
+    return
+
+
+def restart(message):
+    bot.send_message(message.chat.id, 'Введите команду или нажмите кнопку.')
+    markup = tb.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button_hello = tb.types.KeyboardButton('Привет, бот!', )
+    markup.add(button_hello)
+    return
+
+
+@bot.message_handler(commands=['get_formulas'])
+def get_formalas(message):
+    response = requests.get('https://ctege.info/knigi-po-matematike-dlya-podgotovki-k-ege/formulyi-ege-po-matematik-osnovnyie-shkolnyie-formulyi-po-algebre-i-geometrii.html')
+    data = response.content
+    html = bs(data, 'html.parser')
+    div_list = html.find_all('div', class_='spoyler-content')
+    images_list = [str(el.find('img')['src']) for el in div_list]
+    rand_image = choice(images_list)
+    bot.send_message(message.chat.id, f'Получай случайно выбранные формулы!\nУчи хорошенько, скоро сдавать ЕГЭ.\n{rand_image}\nВсегда Пожалуйста!')
+    bot.register_next_step_handler(message, restart)
+    return
+
+
+@bot.message_handler(commands=['square_equation'])
+def square(message):
+    bot.send_message(message.chat.id,'Введите коэффикиенты уравнения (a b c) через пробел.\nНапример: 1 -9 0')
+    bot.register_next_step_handler(message, solve_equation)
+    return
+
+
+# команда-список команд
+@bot.message_handler(commands=['help'], )
+def hello(message):
+    text_welcome = 'Приветствую вас! Вот список моих команд:\n/square_equation - решить стандартное квадратное уравнение\n/gravitation - расчитать силу притяжения\n' \
+                   '/help - узнать команды бота\n/get_formulas - получить рандомную картинку с формулами для подготовки к ЕГЭ'
+    bot.send_message(message.chat.id, text_welcome)
+    return
+
+
+# расчет силы гравитации
+@bot.message_handler(commands=['gravitation'])
+def gravitation_get_data(message):
+    bot.send_message(message.chat.id, 'Введите растояние, первую массу и вторую массу (R m1 m2) через пробелы. Например: 20000 394895 128890000')
+    bot.register_next_step_handler(message, solve_gravitation)
+    return
+
+
+# ввод приветствия
+@bot.message_handler(content_types=['text'])
+def message_reply(message):
+    if message.text == "Привет, бот!":
+        bot.send_message(message.chat.id,
+                             'Приветствую вас! Вот список моих команд:\n/square_equation - решить стандартное квадратное уравнение\n/gravitation - расчитать силу притяжения\n' \
+                   '/help - узнать команды бота\n/get_formulas - получить рандомную картинку с формулами для подготовки к ЕГЭ')
+        pass
+    return
+
+
+# команда-получение коэффициентов
+@bot.message_handler(content_types=['text'])
+def solve_equation(message):
+    try:
+        if message.text != 'стоп':
+            abc = message.text
+            abc_list = list(int(el.strip()) for el in [i.strip() for i in str(abc).split(' ')])
+            a, b, c = abc_list[0], abc_list[1], abc_list[2]
+            example = f'{a}x^2  +  {b}x  +  {c} = 0'
+            if a != 0:
+                if b < 0:
+                    example = f'{a}x^2  {b}x +  {c} = 0'
+                elif c < 0:
+                    example = f'{a}x^2  +  {b}x  {c} = 0'
+                if c < 0 and b < 0:
+                    example = f'{a}x^2  {b}x  {c} = 0'
+               # bot.send_message(message.chat.id, example)
+            # дискриминант и находим корни
+            disqr = b ** 2 - 4 * a * c
+            if disqr > 0:
+                    solution = f'x1 = {(-b + sqrt(disqr)) / (2 * a)} x2 = {(-b - sqrt(disqr)) / (2 * a)}'
+            elif disqr == 0:
+                solution = f'x = {-b / (2 * a)}'
+            else:
+                solution = 'Уравнение не имеет решений'
+            bot.reply_to(message, f'Коэффициенты: a = {a}, b = {b}, c = {c}\n{example}\n{solution}\nВсегда Пожалуйста!')
+            #bot.register_next_step_handler(message, break_())
+            bot.register_next_step_handler(message, restart)
+            pass
+    except ValueError and ZeroDivisionError and IndexError:
+        bot.send_message(message.chat.id, 'Неверный формат данных! Внимательнее прочитайте инструкцию и проверьте наличие(или уравнение не квадратное).\nВсегда Пожалуйста! ')
+        bot.register_next_step_handler(message, restart)
+    return
+
+
+# команда-расчет силы гравитации
+@bot.message_handler(content_types=['text'])
+def solve_gravitation(message):
+    try:
+        gravitation_data = message.text
+        gravitation_data_list = list(int(el) for el in [i.strip() for i in str(gravitation_data).split(' ')])
+        r, m1, m2 = gravitation_data_list[0], gravitation_data_list[1], gravitation_data_list[2]
+        # непосредственно расчет
+        F_gratiation = (6.67 * (10**-11) * m1 * m2) / (r**2)
+        bot.reply_to(message, f'R = {r}, m1 = {m1}, m2 = {m2}\nСила гравитации F = {F_gratiation} H\nВсегда Пожалуйста!')
+        bot.register_next_step_handler(message, restart)
+        bot.register_next_step_handler(message, restart)
+        pass
+    except ValueError and ZeroDivisionError and IndexError:
+        bot.send_message(message.chat.id, 'Неверный формат данных! Внимательнее прочитайте инструкцию и проверьте напиличе пробелов.\nВсегда Пожалуйста!')
+    return
+
+
+# активатор кода
+bot.infinity_polling()
